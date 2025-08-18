@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comfort Air — Notion Timer Widget (v1)</title>
+  <style>
+    :root {
+      --bg: #0b1220;           /* canvas background */
+      --panel: #121a2b;        /* card background */
+      --panel-2: #0e1626;      /* header background */
+      --text: #d9e2ef;         /* primary text */
+      --muted: #8aa1b4;        /* muted text */
+      --accent: #1fb6ff;       /* accent 1 (blue) */
+      --accent-2: #34d399;     /* accent 2 (emerald) */
+      --danger: #ef4444;       /* red */
+      --shadow: rgba(0,0,0,.35);
+      --radius: 18px;
+      --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    /* Light theme */
+    .theme-light { --bg: #fafafa; --panel: #ffffff; --panel-2:#f3f4f6; --text: #0f172a; --muted:#6b7280; --accent:#2563eb; --accent-2:#10b981; --shadow:rgba(0,0,0,.12); }
+    /* High contrast */
+    .theme-contrast { --bg:#000; --panel:#000; --panel-2:#000; --text:#fff; --muted:#bbb; --accent:#fff; --accent-2:#fff; --shadow:rgba(0,0,0,.6);}    
+    /* Neon theme */
+    .theme-neon { --bg:#0b1020; --panel:#0b1020; --panel-2:#0b1020; --text:#c4cff5; --muted:#8aa1b4; --accent:#7c3aed; --accent-2:#06b6d4; }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: var(--font-ui);
+      display: grid; place-items: center;
+    }
+    .wrap { display: grid; gap: 12px; width: min(560px, 92vw); }
+
+    .card {
+      background: var(--panel); border-radius: var(--radius);
+      box-shadow: 0 10px 30px var(--shadow);
+      padding: 18px; position: relative;
+    }
+
+    /* Header */
+    .header { display:flex; align-items:center; justify-content:space-between; background: var(--panel-2); border-radius: calc(var(--radius) - 6px); padding: 12px 14px; }
+    .label { font-weight: 700; letter-spacing:.3px; }
+    .right { display:flex; gap:10px; align-items:center; }
+    .tag { font-size: 12px; color: var(--muted); background: rgba(255,255,255,.06); padding: 6px 8px; border-radius: 999px; }
+
+    .timer {
+      display:grid; grid-template-columns: 1fr auto; gap: 18px; align-items:center; padding-top: 8px;
+    }
+
+    .digits {
+      font-family: var(--font-mono); font-size: clamp(56px, 14vw, 110px); font-weight: 800;
+      letter-spacing: .04em; text-align:center; line-height: .95; user-select:none;
+    }
+
+    /* circular progress ring */
+    .ring { width: clamp(82px, 16vw, 140px); height: clamp(82px, 16vw, 140px); position: relative; }
+    .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ring circle.bg { stroke: rgba(255,255,255,.08); }
+    .ring circle.fg { stroke: var(--accent); filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent) 60%, transparent)); }
+
+    .controls { display:flex; gap:10px; flex-wrap: wrap; }
+    .controls button {
+      background: var(--accent); color: #06121c; font-weight:700; border:none; padding: 10px 14px; border-radius: 12px; cursor:pointer;
+      transition: transform .08s ease, opacity .2s ease;
+    }
+    .controls button:active { transform: translateY(1px) scale(.98); }
+    .controls .ghost { background: rgba(255,255,255,.08); color: var(--text); }
+    .controls .danger { background: var(--danger); color: #fff; }
+
+    .grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .panel { background: var(--panel-2); border-radius: 14px; padding: 12px; display:grid; gap:8px; }
+    .panel h4 { margin:0; font-size: 12px; color: var(--muted); letter-spacing:.2px; text-transform:uppercase; }
+    .panel .row { display:flex; align-items:center; justify-content:space-between; }
+    .panel input[type="number"] { width: 84px; background: rgba(255,255,255,.06); color: var(--text); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 8px 10px; font-size:14px; }
+    .panel select, .panel input[type="checkbox"] { accent-color: var(--accent); }
+    .panel .small { font-size: 12px; color: var(--muted); }
+
+    .foot { display:flex; justify-content:space-between; align-items:center; font-size:12px; color: var(--muted); padding-top: 6px; }
+    .link { color: var(--accent-2); text-decoration: none; }
+
+    .compact .grid, .compact .foot, .compact .tag, .compact .panel { display:none; }
+    .compact .controls .ghost { display:none; }
+
+    .transparent { background: transparent; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="card" class="card">
+      <div class="header">
+        <div class="label" id="label">Session</div>
+        <div class="right">
+          <span class="tag" id="modeTag">Work</span>
+          <span class="tag" id="status">Idle</span>
+        </div>
+      </div>
+
+      <div class="timer">
+        <div class="digits" id="digits">25:00</div>
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120">
+            <circle class="bg" cx="60" cy="60" r="54" stroke-width="12" fill="none"></circle>
+            <circle class="fg" id="ringFG" cx="60" cy="60" r="54" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="339.292" stroke-dashoffset="0"></circle>
+          </svg>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="startPause">▶ Start</button>
+        <button id="reset" class="ghost">↺ Reset</button>
+        <button id="skip" class="ghost">⤿ Skip</button>
+        <button id="switch" class="ghost">⇄ Switch</button>
+        <button id="mute" class="ghost">🔔</button>
+        <button id="panic" class="danger">Stop</button>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h4>Durations (min)</h4>
+          <div class="row"><span>Work</span><input id="minsWork" type="number" min="1" max="240" value="25"/></div>
+          <div class="row"><span>Break</span><input id="minsBreak" type="number" min="1" max="120" value="5"/></div>
+          <span class="small">Keyboard: <b>Space</b> start/pause, <b>R</b> reset.</span>
+        </div>
+        <div class="panel">
+          <h4>Options</h4>
+          <div class="row"><span>Auto‑switch to break</span><input id="autoBreak" type="checkbox" checked/></div>
+          <div class="row"><span>Auto‑restart work</span><input id="autoWork" type="checkbox"/></div>
+          <div class="row"><span>Theme</span>
+            <select id="themeSel">
+              <option value="comfort">Comfort</option>
+              <option value="light">Light</option>
+              <option value="contrast">High‑Contrast</option>
+              <option value="neon">Neon</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel">
+          <h4>Embed Settings</h4>
+          <div class="row"><span>Label</span><input id="labelInput" type="text" placeholder="Task label"/></div>
+          <span class="small">Tip: pass URL params like <code>?label=Estimate%20187&mins=30&break=5&autostart=1&compact=1</code></span>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div>Comfort Air Notion Timer • v1</div>
+        <div><a class="link" id="share" href="#">Share link</a></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Utilities ----------
+    const qs = new URLSearchParams(location.search);
+    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+    const fmt = s => {
+      const m = Math.floor(s/60); const r = s % 60; return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+    };
+
+    const storageKey = 'comfort-notion-timer-v1';
+    const bell = {
+      muted: false,
+      play(type='done') {
+        if (this.muted) return;
+        // WebAudio beep — no external files
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g).connect(ctx.destination);
+        o.type = 'sine';
+        const now = ctx.currentTime;
+        if (type==='tick') { o.frequency.setValueAtTime(660, now); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.05, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.12); }
+        else { o.frequency.setValueAtTime(880, now); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.2, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.35); }
+        o.start(now); o.stop(now+0.4);
+      }
+    };
+
+    function setTheme(name) {
+      document.body.classList.remove('theme-light','theme-contrast','theme-neon');
+      if (name==='light') document.body.classList.add('theme-light');
+      else if (name==='contrast') document.body.classList.add('theme-contrast');
+      else if (name==='neon') document.body.classList.add('theme-neon');
+      // default = Comfort (dark teal/blue)
+    }
+
+    function applyCompact(on) {
+      document.getElementById('card').classList.toggle('compact', !!on);
+    }
+
+    function applyTransparent(on) {
+      document.getElementById('card').classList.toggle('transparent', !!on);
+      document.body.style.background = on ? 'transparent' : getComputedStyle(document.documentElement).getPropertyValue('--bg');
+    }
+
+    // ---------- Timer State ----------
+    const ringCircumference = 2 * Math.PI * 54; // r=54
+    const ring = document.getElementById('ringFG');
+    ring.setAttribute('stroke-dasharray', ringCircumference.toFixed(3));
+
+    const ui = {
+      label: document.getElementById('label'),
+      status: document.getElementById('status'),
+      digits: document.getElementById('digits'),
+      mode: document.getElementById('modeTag'),
+      minsWork: document.getElementById('minsWork'),
+      minsBreak: document.getElementById('minsBreak'),
+      themeSel: document.getElementById('themeSel'),
+      autoBreak: document.getElementById('autoBreak'),
+      autoWork: document.getElementById('autoWork'),
+      labelInput: document.getElementById('labelInput'),
+      startPause: document.getElementById('startPause'),
+      reset: document.getElementById('reset'),
+      skip: document.getElementById('skip'),
+      switchBtn: document.getElementById('switch'),
+      panic: document.getElementById('panic'),
+      mute: document.getElementById('mute'),
+      share: document.getElementById('share'),
+    };
+
+    let timer = {
+      mode: 'work', // 'work' | 'break'
+      total: 25*60,
+      remain: 25*60,
+      running: false,
+      startedAt: null,
+      raf: null,
+      webhook: null,
+    };
+
+    function setDigits(sec) { ui.digits.textContent = fmt(Math.max(0, Math.round(sec))); }
+
+    function setRing(progress) { // 0..1
+      const offset = ringCircumference * (1 - progress);
+      ring.style.strokeDashoffset = Math.max(0, offset).toFixed(2);
+      ring.style.stroke = timer.mode==='work' ? getComputedStyle(document.documentElement).getPropertyValue('--accent') : 'var(--accent-2)';
+    }
+
+    function updateHeader() {
+      ui.mode.textContent = timer.mode === 'work' ? 'Work' : 'Break';
+    }
+
+    function save() {
+      const data = {
+        work: Number(ui.minsWork.value)||25,
+        brk: Number(ui.minsBreak.value)||5,
+        label: ui.labelInput.value||'Session',
+        theme: ui.themeSel.value,
+        autoBreak: ui.autoBreak.checked,
+        autoWork: ui.autoWork.checked,
+        muted: bell.muted,
+      };
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    function load() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        if (cached.work) ui.minsWork.value = cached.work;
+        if (cached.brk) ui.minsBreak.value = cached.brk;
+        if (cached.label) ui.labelInput.value = cached.label;
+        if (cached.theme) ui.themeSel.value = cached.theme;
+        if (typeof cached.autoBreak==='boolean') ui.autoBreak.checked = cached.autoBreak;
+        if (typeof cached.autoWork==='boolean') ui.autoWork.checked = cached.autoWork;
+        bell.muted = !!cached.muted;
+        ui.mute.textContent = bell.muted ? '🔕' : '🔔';
+      } catch {}
+    }
+
+    function fromURL() {
+      // Accept URL params for easy Notion embeds
+      const theme = qs.get('theme') || 'comfort';
+      const label = qs.get('label');
+      const mins = Number(qs.get('mins'));
+      const brk = Number(qs.get('break'));
+      const compact = qs.get('compact');
+      const transparent = qs.get('bg') === 'transparent' || qs.get('transparent') === '1';
+      const autostart = qs.get('autostart') === '1' || qs.get('start') === '1';
+      const muted = qs.get('muted') === '1';
+      const webhook = qs.get('webhook');
+
+      if (theme) ui.themeSel.value = theme;
+      if (Number.isFinite(mins)) ui.minsWork.value = clamp(mins,1,240);
+      if (Number.isFinite(brk)) ui.minsBreak.value = clamp(brk,1,120);
+      if (label) ui.labelInput.value = label;
+      if (compact !== null) applyCompact(compact==='1' || compact==='true');
+      if (transparent) applyTransparent(true);
+      if (muted) { bell.muted = true; ui.mute.textContent = '🔕'; }
+      if (webhook) timer.webhook = webhook;
+      setTheme(theme);
+
+      // Initialize timer digits
+      setWork();
+      if (autostart) toggleStart();
+    }
+
+    function setWork() {
+      timer.mode = 'work';
+      timer.total = clamp(Number(ui.minsWork.value)*60, 60, 240*60);
+      timer.remain = timer.total; ui.label.textContent = ui.labelInput.value || 'Session';
+      setDigits(timer.remain); setRing(1); updateHeader(); ui.status.textContent = 'Ready';
+      save();
+    }
+    function setBreak() {
+      timer.mode = 'break';
+      timer.total = clamp(Number(ui.minsBreak.value)*60, 60, 120*60);
+      timer.remain = timer.total; ui.label.textContent = (ui.labelInput.value? ui.labelInput.value+ ' — ' : '') + 'Break';
+      setDigits(timer.remain); setRing(1); updateHeader(); ui.status.textContent = 'Ready';
+      save();
+    }
+
+    function tick() {
+      if (!timer.running) return;      
+      const now = performance.now();
+      const elapsed = (now - timer.startedAt) / 1000; // seconds since start/pause resume
+      const remain = timer.anchor - elapsed;
+      timer.remain = Math.max(0, remain);
+      setDigits(timer.remain);
+      setRing(timer.remain / timer.total);
+      if (timer.remain <= 0) return done();
+      timer.raf = requestAnimationFrame(tick);
+    }
+
+    function toggleStart() {
+      if (timer.running) { // pause
+        timer.running = false; ui.startPause.textContent = '▶ Resume'; ui.status.textContent = 'Paused';
+        cancelAnimationFrame(timer.raf);
+        save(); return;
+      }
+      // start
+      timer.running = true; ui.startPause.textContent = '⏸ Pause'; ui.status.textContent = 'Running';
+      timer.startedAt = performance.now();
+      timer.anchor = timer.total - (timer.total - timer.remain); // how much was left
+      if (!timer.anchor || timer.anchor < 0) timer.anchor = timer.total; // fresh start
+      timer.anchor = timer.total - (timer.total - timer.remain);
+      bell.play('tick');
+      postWebhook('start');
+      timer.raf = requestAnimationFrame(tick);
+    }
+
+    function reset() {
+      timer.running = false; cancelAnimationFrame(timer.raf); ui.startPause.textContent = '▶ Start'; ui.status.textContent = 'Idle';
+      if (timer.mode==='work') setWork(); else setBreak();
+      postWebhook('reset');
+    }
+
+    function skip() {
+      if (timer.mode==='work') { setBreak(); } else { setWork(); }
+      ui.status.textContent = 'Skipped';
+    }
+
+    function switchMode() {
+      if (timer.mode==='work') setBreak(); else setWork();
+    }
+
+    function panicStop() { timer.running=false; cancelAnimationFrame(timer.raf); ui.startPause.textContent='▶ Start'; ui.status.textContent='Stopped'; }
+
+    function done() {
+      timer.running = false; cancelAnimationFrame(timer.raf);
+      setDigits(0); setRing(0);
+      ui.startPause.textContent = '▶ Start'; ui.status.textContent = 'Done';
+      bell.play('done');
+      postWebhook('done');
+      if (timer.mode==='work' && ui.autoBreak.checked) { setBreak(); if (ui.autoWork.checked) { toggleStart(); } }
+    }
+
+    function postWebhook(event) {
+      if (!timer.webhook) return;
+      try {
+        fetch(timer.webhook, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            event,
+            label: ui.labelInput.value || 'Session',
+            mode: timer.mode,
+            seconds_total: timer.total,
+            seconds_remaining: timer.remain,
+            time: new Date().toISOString(),
+            user_agent: navigator.userAgent
+          })
+        }).catch(()=>{});
+      } catch {}
+    }
+
+    // ---------- Wire up ----------
+    load();
+    setTheme(ui.themeSel.value);
+    setWork();
+
+    ui.themeSel.addEventListener('change', () => { setTheme(ui.themeSel.value); save(); });
+    ui.minsWork.addEventListener('change', setWork);
+    ui.minsBreak.addEventListener('change', setBreak);
+    ui.labelInput.addEventListener('input', () => { ui.label.textContent = ui.labelInput.value || 'Session'; save(); });
+
+    ui.startPause.addEventListener('click', toggleStart);
+    ui.reset.addEventListener('click', reset);
+    ui.skip.addEventListener('click', skip);
+    ui.switchBtn.addEventListener('click', switchMode);
+    ui.panic.addEventListener('click', panicStop);
+    ui.mute.addEventListener('click', () => { bell.muted = !bell.muted; ui.mute.textContent = bell.muted ? '🔕' : '🔔'; save(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); toggleStart(); }
+      if (e.key.toLowerCase() === 'r') { reset(); }
+    });
+
+    // Share link builder
+    ui.share.addEventListener('click', (e) => {
+      e.preventDefault();
+      const url = new URL(location.href);
+      const params = new URLSearchParams();
+      params.set('label', ui.labelInput.value || 'Session');
+      params.set('mins', ui.minsWork.value);
+      params.set('break', ui.minsBreak.value);
+      params.set('theme', ui.themeSel.value);
+      if (ui.autoBreak.checked) params.set('autoswitch','1');
+      const share = `${url.origin}${url.pathname}?${params.toString()}`;
+      navigator.clipboard.writeText(share).then(()=>{ ui.status.textContent='Link copied'; setTimeout(()=>ui.status.textContent='Idle', 1200); });
+    });
+
+    // URL params last (overrides cache)
+    fromURL();
+  </script>
+</body>
+</html>
