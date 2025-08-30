@@ -1,2 +1,337 @@
-<!-- Timer core file v1.2.0 -->
-<html><body><h1>Timer Core</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comfort Air — Notion Timer (v1.2.0)</title>
+<style>
+:root{
+  --bg:#0b1220;--panel:#0f142b;--panel-2:#0e1626;--text:#d9e2ef;--muted:#8aa1b4;
+  --accent:#1fb6ff;--accent-2:#34d399;--danger:#ef4444;--shadow:rgba(0,0,0,.35);
+  --radius:18px;--ringBase:rgba(255,255,255,.08);
+  --font-ui:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,Apple Color Emoji,Segoe UI Emoji;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+}
+/* Themes */
+.theme-comfort{--bg:#0b1220;--panel:#0f142b;--panel-2:#0e1626;--text:#d9e2ef;--muted:#8aa1b4;--accent:#1fb6ff;--accent-2:#34d399;--ringBase:rgba(255,255,255,.08);}
+.theme-light{--bg:#fafafa;--panel:#ffffff;--panel-2:#f3f4f6;--text:#0f172a;--muted:#6b7280;--accent:#2563eb;--accent-2:#10b981;--ringBase:rgba(0,0,0,.08);}
+.theme-contrast{--bg:#000;--panel:#000;--panel-2:#111;--text:#e5e7eb;--muted:#9ca3af;--accent:#fff;--accent-2:#fff;--ringBase:rgba(255,255,255,.12);}
+.theme-neon{--bg:#070811;--panel:#0f1020;--panel-2:#0c0d1a;--text:#e9e7ff;--muted:#b6b3ff;--accent:#8b5cf6;--accent-2:#22d3ee;--ringBase:rgba(124,58,237,.18);}
+.theme-midnight{--bg:#0a0e16;--panel:#0c1222;--panel-2:#0a1020;--text:#cfe7ff;--muted:#9db6d2;--accent:#60a5fa;--accent-2:#22d3ee;--ringBase:rgba(255,255,255,.10);}
+.theme-cobalt{--bg:#060a20;--panel:#07112a;--panel-2:#071029;--text:#dbeafe;--muted:#93c5fd;--accent:#06b6d4;--accent-2:#3b82f6;--ringBase:rgba(59,130,246,.16);}
+
+html,body{height:100%} body{
+  margin:0; background:var(--bg); color:var(--text); font-family:var(--font-ui);
+  display:grid; place-items:center;
+}
+.wrap{display:grid; gap:12px; width:min(560px,92vw)}
+.card{
+  background:linear-gradient(to bottom right, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:var(--radius); box-shadow:0 18px 50px var(--shadow); padding:18px;
+  backdrop-filter: blur(16px);
+}
+.hdr{display:flex; align-items:center; justify-content:space-between}
+.badges span{font-size:.75rem; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); margin-left:6px}
+.label{font-weight:800; font-size:1.15rem}
+.grid{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center}
+.big{font-weight:900; font-size:88px; letter-spacing:3px}
+.btns{display:flex; flex-wrap:wrap; gap:10px}
+.btn{
+  border-radius:14px; padding:10px 14px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04);
+  color:var(--text); cursor:pointer; user-select:none
+}
+.btn.primary{background:var(--accent); color:#001019; border-color:transparent; font-weight:700}
+.btn.warn{background:var(--danger); border-color:transparent; color:white}
+.small{font-size:.8rem; color:var(--muted)}
+.cols{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
+.box{border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:12px; background:rgba(0,0,0,.18)}
+.input{width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:var(--text); padding:8px 10px}
+.row{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.kbd{font-family:var(--font-mono); background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); padding:2px 6px; border-radius:6px}
+
+.ring{
+  width:160px; height:160px; border-radius:26px; position:relative; padding:6px;
+  background:
+    radial-gradient(120px 120px at 25% 25%, var(--accent)15, transparent),
+    radial-gradient(120px 120px at 75% 75%, var(--accent-2)15, transparent);
+}
+.ring .track{position:absolute; inset:0; border-radius:26px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 40px rgba(31,182,255,.22)}
+.ring .arc{position:absolute; inset:6px; border-radius:20px; background:conic-gradient(var(--accent) 0% 0%, var(--ringBase) 0%)}
+.ring .inner{position:absolute; inset:16px; border-radius:16px; background:rgba(0,0,0,.45); display:grid; place-items:center; border:1px solid rgba(255,255,255,.10)}
+.compact .big{font-size:64px}
+.hidebar .labelbar{display:none}
+a.link{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="hdr">
+      <div class="labelbar"><span class="label" id="lbl">Session</span></div>
+      <div class="badges"><span id="phase">Ready</span><span id="status">Stopped</span></div>
+    </div>
+
+    <div class="grid">
+      <div class="big" id="digits">25:00</div>
+      <div class="ring">
+        <div class="track"></div>
+        <div class="arc" id="arc"></div>
+        <div class="inner"></div>
+      </div>
+    </div>
+
+    <div class="btns" style="margin-top:10px">
+      <button class="btn primary" id="start">▶ Start</button>
+      <button class="btn" id="reset">↺ Reset</button>
+      <button class="btn" id="skip">↷ Skip</button>
+      <button class="btn" id="switch">⇄ Switch</button>
+      <button class="btn" id="mute">🔔</button>
+      <button class="btn" id="share">Share link</button>
+    </div>
+
+    <div class="cols" style="margin-top:12px">
+      <div class="box">
+        <div class="small" style="margin-bottom:6px">DURATIONS (MIN)</div>
+        <label class="small">Work
+          <input id="minsWork" class="input" type="number" min="1" max="240" value="25"/>
+        </label>
+        <label class="small" style="margin-top:8px">Break
+          <input id="minsBreak" class="input" type="number" min="1" max="120" value="5"/>
+        </label>
+        <div class="small" style="margin-top:8px">Keyboard: <span class="kbd">Space</span> start/pause, <span class="kbd">R</span> reset.</div>
+      </div>
+
+      <div class="box">
+        <div class="small" style="margin-bottom:6px">OPTIONS</div>
+        <label class="row small"><span>Auto-switch to break</span><input id="autoBreak" type="checkbox"/></label>
+        <label class="row small" style="margin-top:6px"><span>Auto-restart work</span><input id="autoRestart" type="checkbox"/></label>
+        <label class="row small" style="margin-top:6px"><span>Compact</span><input id="compact" type="checkbox"/></label>
+        <label class="row small" style="margin-top:6px"><span>Transparent BG</span><input id="transparent" type="checkbox"/></label>
+        <label class="row small" style="margin-top:6px"><span>Hide label bar</span><input id="labelbar" type="checkbox"/></label>
+        <label class="row small" style="margin-top:6px"><span>Vibrate on finish</span><input id="vibrate" type="checkbox" checked/></label>
+        <label class="row small" style="margin-top:6px"><span>Sound on finish</span><input id="sound" type="checkbox" checked/></label>
+        <div class="small" style="margin-top:6px">Theme
+          <select id="themeSel" class="input" style="margin-top:6px">
+            <option value="comfort">Comfort</option>
+            <option value="light">Light</option>
+            <option value="contrast">Contrast</option>
+            <option value="neon">Neon</option>
+            <option value="midnight">Midnight</option>
+            <option value="cobalt">Cobalt</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="small" style="margin-bottom:6px">EMBED SETTINGS</div>
+        <label class="small">Label
+          <input id="labelInput" class="input" placeholder="Task label" />
+        </label>
+        <div class="small" style="margin-top:10px">Tip: pass URL params like
+          <code>?label=Estimate&mins=30&break=5&autostart=1&compact=1</code>
+        </div>
+        <div class="small" style="margin-top:10px">
+          <label>Webhook URL <input id="webhook" class="input" placeholder="https://…"/></label>
+          <label style="margin-top:6px">On finish → Next URL <input id="nextUrl" class="input" placeholder="https://…"/></label>
+          <label style="margin-top:6px">On finish → Toast <input id="toastMsg" class="input" placeholder="Nice work!"/></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="small" style="margin-top:10px">Comfort Air Notion Timer · v1.2.0</div>
+  </div>
+</div>
+
+<script>
+/* ===== v1.2.0 Timer core ===== */
+const ui = {
+  lbl: qs('#lbl'), digits: qs('#digits'), arc: qs('#arc'),
+  phase: qs('#phase'), status: qs('#status'),
+  start: qs('#start'), reset: qs('#reset'), skip: qs('#skip'), switchBtn: qs('#switch'), mute: qs('#mute'), share: qs('#share'),
+  minsWork: qs('#minsWork'), minsBreak: qs('#minsBreak'),
+  autoBreak: qs('#autoBreak'), autoRestart: qs('#autoRestart'),
+  compact: qs('#compact'), transparent: qs('#transparent'), labelbar: qs('#labelbar'),
+  themeSel: qs('#themeSel'), labelInput: qs('#labelInput'),
+  vibrate: qs('#vibrate'), sound: qs('#sound'),
+  webhook: qs('#webhook'), nextUrl: qs('#nextUrl'), toastMsg: qs('#toastMsg'),
+};
+
+function qs(s){return document.querySelector(s)}
+function clamp(n,a,b){return Math.max(a,Math.min(b,n))}
+function fmt(n){return String(n).padStart(2,'0')}
+function setTheme(t){
+  document.body.classList.remove(...Array.from(document.body.classList).filter(c=>c.startsWith('theme-')));
+  document.body.classList.add('theme-'+t);
+}
+function applyCompact(on){document.body.classList.toggle('compact', !!on)}
+function applyTransparent(on){document.body.style.background = on ? 'transparent' : '' }
+function applyLabelbar(hide){document.body.classList.toggle('hidebar', !!hide)}
+
+/* state */
+const timer = {
+  work: 25*60, break: 5*60, left: 25*60, running:false, phase:'work', muted:false,
+  webhook:null, next:null, toast:null, autoswitch:false, autorestart:false, vibrate:true, sound:true,
+};
+/* WebAudio (user gesture gating) */
+let ctx=null; function ensureAudio(){ if(ctx) return true; try{ctx=new (window.AudioContext||window.webkitAudioContext)(); return true;}catch(e){return false}}
+function chime(){
+  if(!timer.sound || !ctx) return;
+  const master = ctx.createGain(); master.connect(ctx.destination); master.gain.value=0.6;
+  const now = ctx.currentTime;
+  [[880,0.0,0.18],[1175,0.22,0.22],[1568,0.48,0.24]].forEach(([f,t,d])=>{
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(f, now+t);
+    g.gain.setValueAtTime(.001, now+t); g.gain.exponentialRampToValueAtTime(.4, now+t+.02);
+    g.gain.exponentialRampToValueAtTime(.001, now+t+d);
+    o.connect(g).connect(master); o.start(now+t); o.stop(now+t+d+.02);
+  });
+}
+
+/* tick */
+let iv=null;
+function start(){ if(timer.running) return; timer.running=true; ui.status.textContent='Running'; iv=setInterval(tick,1000) }
+function pause(){ timer.running=false; ui.status.textContent='Paused'; clearInterval(iv) }
+function reset(){ timer.left = (timer.phase==='work'?timer.work:timer.break); paint() }
+function tick(){
+  if(timer.left<=0){ done(); return; }
+  timer.left--; paint();
+}
+function done(){
+  pause();
+  if(timer.sound){ ensureAudio(); chime(); }
+  if(timer.vibrate && navigator.vibrate){ navigator.vibrate([220,100,220,100,320]);}
+  postEvent('done');
+  if(timer.toast){ try{ alert(timer.toast); }catch{} }
+  if(timer.next){ location.href = timer.next; return; }
+  if(timer.autoswitch){ switchPhase(); if(timer.autorestart){ start(); } }
+}
+function switchPhase(){
+  timer.phase = (timer.phase==='work')?'break':'work';
+  ui.phase.textContent = (timer.phase==='work')?'Work':'Break';
+  timer.left = (timer.phase==='work'?timer.work:timer.break); paint();
+}
+
+function paint(){
+  const m = Math.floor(timer.left/60), s = timer.left%60;
+  ui.digits.textContent = `${fmt(m)}:${fmt(s)}`;
+  const total = (timer.phase==='work'?timer.work:timer.break), pct = (1 - timer.left/Math.max(1,total))*100;
+  ui.arc.style.background = `conic-gradient(var(--accent) ${pct}%, var(--ringBase) ${pct}%)`;
+}
+
+/* events */
+ui.start.addEventListener('click', ()=>{ ensureAudio(); timer.running?pause():start(); ui.start.textContent = timer.running?'Pause':'Start' });
+ui.reset.addEventListener('click', ()=>{ reset(); postEvent('reset') });
+ui.skip.addEventListener('click', ()=>{ timer.left=0; done(); });
+ui.switchBtn.addEventListener('click', ()=>{ switchPhase(); postEvent('start') });
+ui.mute.addEventListener('click', ()=>{ timer.sound=!timer.sound; ui.mute.textContent = timer.sound?'🔔':'🔕' });
+document.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); ui.start.click(); } if(e.key.toLowerCase()==='r'){ ui.reset.click(); }});
+ui.share.addEventListener('click', ()=>{
+  const u = new URL(location.href);
+  const p = u.searchParams; p.set('label', ui.labelInput.value||'Session');
+  p.set('mins', ui.minsWork.value); p.set('break', ui.minsBreak.value);
+  p.set('theme', ui.themeSel.value); if(ui.compact.checked) p.set('compact','1');
+  if(ui.transparent.checked) p.set('bg','transparent'); if(ui.labelbar.checked) p.set('labelbar','0');
+  if(timer.autoswitch) p.set('autoswitch','1'); if(timer.autorestart) p.set('autorestart','1');
+  if(!timer.sound) p.set('muted','1'); if(timer.vibrate) p.set('vibrate','1');
+  if(timer.webhook) p.set('webhook', timer.webhook); if(timer.next) p.set('next', timer.next);
+  if(timer.toast) p.set('toast', timer.toast);
+  navigator.clipboard.writeText(`${u.origin}${u.pathname}?${p.toString()}`).then(()=>{ ui.status.textContent='Link copied'; setTimeout(()=>ui.status.textContent='Idle',1200) })
+});
+
+/* config bindings */
+ui.minsWork.addEventListener('change', ()=>{ timer.work = clamp(parseInt(ui.minsWork.value||'25',10),1,240)*60; if(timer.phase==='work') reset(); save(); });
+ui.minsBreak.addEventListener('change', ()=>{ timer.break = clamp(parseInt(ui.minsBreak.value||'5',10),1,120)*60; if(timer.phase==='break') reset(); save(); });
+ui.autoBreak.addEventListener('change', ()=>{ timer.autoswitch=ui.autoBreak.checked; save(); });
+ui.autoRestart.addEventListener('change', ()=>{ timer.autorestart=ui.autoRestart.checked; save(); });
+ui.compact.addEventListener('change', ()=>{ applyCompact(ui.compact.checked); save(); });
+ui.transparent.addEventListener('change', ()=>{ applyTransparent(ui.transparent.checked); save(); });
+ui.labelbar.addEventListener('change', ()=>{ applyLabelbar(ui.labelbar.checked); save(); });
+ui.themeSel.addEventListener('change', ()=>{ setTheme(ui.themeSel.value); save(); });
+ui.labelInput.addEventListener('input', ()=>{ ui.lbl.textContent = ui.labelInput.value||'Session'; save(); });
+ui.vibrate.addEventListener('change', ()=>{ timer.vibrate = ui.vibrate.checked; save(); });
+ui.sound.addEventListener('change', ()=>{ timer.sound = ui.sound.checked; ui.mute.textContent = timer.sound?'🔔':'🔕'; save(); });
+ui.webhook.addEventListener('change', ()=>{ timer.webhook = ui.webhook.value||null; save(); });
+ui.nextUrl.addEventListener('change', ()=>{ timer.next = ui.nextUrl.value||null; save(); });
+ui.toastMsg.addEventListener('change', ()=>{ timer.toast = ui.toastMsg.value||null; save(); });
+
+/* URL params */
+function fromURL(){
+  const p = new URLSearchParams(location.search);
+  const theme = p.get('theme') || 'comfort';
+  const label = p.get('label'); const mins = Number(p.get('mins')); const brk = Number(p.get('break'));
+  const compact = p.get('compact'); const transparent = (p.get('bg')==='transparent'||p.get('transparent')==='1');
+  const autostart = (p.get('autostart')==='1'||p.get('start')==='1');
+  const autoswitch = p.get('autoswitch')==='1'; const autorestart = p.get('autorestart')==='1';
+  const muted = (p.get('muted')==='1'||p.get('sound')==='0'); const vibrate = p.get('vibrate')!=='0';
+  const ring = p.get('ring'); const glow = p.get('glow'); const accent = p.get('accent'); const accent2 = p.get('accent2');
+  const labelbar = p.get('labelbar')==='0';
+  const webhook = p.get('webhook'); const next = p.get('next'); const toast = p.get('toast');
+  const test = p.get('test')==='1';
+
+  ui.themeSel.value = theme; setTheme(theme);
+  if(Number.isFinite(mins)) ui.minsWork.value = clamp(mins,1,240);
+  if(Number.isFinite(brk)) ui.minsBreak.value = clamp(brk,1,120);
+  if(label){ ui.labelInput.value = label; ui.lbl.textContent = label; }
+  if(compact!=null) ui.compact.checked = (compact==='1'||compact==='true');
+  if(transparent) ui.transparent.checked = true;
+  if(labelbar) ui.labelbar.checked = true;
+  if(autoswitch) ui.autoBreak.checked = true;
+  if(autorestart) ui.autoRestart.checked = true;
+  timer.sound = !muted; ui.sound.checked = timer.sound; ui.mute.textContent = timer.sound?'🔔':'🔕';
+  timer.vibrate = vibrate; ui.vibrate.checked = vibrate;
+  if(webhook){ ui.webhook.value = webhook; timer.webhook = webhook; }
+  if(next){ ui.nextUrl.value = next; timer.next = next; }
+  if(toast){ ui.toastMsg.value = toast; timer.toast = toast; }
+  if(ring==='thin'){ document.documentElement.style.setProperty('--ringBase','rgba(255,255,255,.06)'); }
+  if(ring==='normal'){ document.documentElement.style.setProperty('--ringBase','rgba(255,255,255,.10)'); }
+  if(ring==='thick'){ document.documentElement.style.setProperty('--ringBase','rgba(255,255,255,.16)'); }
+  if(glow==='1'){ document.querySelector('.ring .track').style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 40px var(--accent)'; }
+  if(accent){ document.documentElement.style.setProperty('--accent', decodeURIComponent(accent)); }
+  if(accent2){ document.documentElement.style.setProperty('--accent-2', decodeURIComponent(accent2)); }
+
+  applyCompact(ui.compact.checked); applyTransparent(ui.transparent.checked); applyLabelbar(ui.labelbar.checked);
+
+  timer.work = clamp(Number(ui.minsWork.value),1,240)*60;
+  timer.break = clamp(Number(ui.minsBreak.value),1,120)*60;
+  timer.autoswitch = ui.autoBreak.checked;
+  timer.autorestart = ui.autoRestart.checked;
+
+  timer.left = timer.work; ui.phase.textContent='Work'; paint();
+
+  if(autostart){ setTimeout(()=>{ ensureAudio(); start(); }, 250); }
+  if(test){ setTimeout(()=>{ ensureAudio(); chime(); }, 300); }
+}
+
+/* webhook */
+function postEvent(kind){
+  if(!timer.webhook) return;
+  try{ fetch(timer.webhook, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event:kind, phase:timer.phase, ts:Date.now()})}); }catch{}
+}
+
+/* persistence (very light) */
+function save(){
+  try{
+    const s = {
+      w: ui.minsWork.value, b: ui.minsBreak.value, t: ui.themeSel.value, l: ui.labelInput.value,
+      aB: ui.autoBreak.checked, aR: ui.autoRestart.checked, c: ui.compact.checked, tr: ui.transparent.checked,
+      lb: ui.labelbar.checked, vib: ui.vibrate.checked, snd: ui.sound.checked
+    };
+    localStorage.setItem('notionTimer1_2', JSON.stringify(s));
+  }catch{}
+}
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem('notionTimer1_2')||'null'); if(!s) return;
+    ui.minsWork.value=s.w||25; ui.minsBreak.value=s.b||5; ui.themeSel.value=s.t||'comfort'; ui.labelInput.value=s.l||'';
+    ui.autoBreak.checked=!!s.aB; ui.autoRestart.checked=!!s.aR; ui.compact.checked=!!s.c; ui.transparent.checked=!!s.tr;
+    ui.labelbar.checked=!!s.lb; ui.vibrate.checked = s.vib!==false; ui.sound.checked = s.snd!==false; timer.sound = ui.sound.checked;
+    setTheme(ui.themeSel.value); applyCompact(ui.compact.checked); applyTransparent(ui.transparent.checked); applyLabelbar(ui.labelbar.checked);
+    if(ui.labelInput.value) ui.lbl.textContent = ui.labelInput.value;
+  }catch{}
+}
+
+load(); fromURL();
+</script>
+</body>
+</html>
