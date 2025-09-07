@@ -123,6 +123,7 @@
         grid-template-columns: 1fr 1fr;
         gap: 8px;
         font-size: 0.8rem;
+        align-items: end;
       }
       .settings label {
         display: flex;
@@ -130,13 +131,20 @@
         gap: 4px;
         color: rgba(255, 255, 255, 0.8);
       }
-      .settings input {
+      .settings input[type="number"] {
         width: 100%;
         border-radius: 6px;
         border: 1px solid rgba(255, 255, 255, 0.14);
         background: rgba(255, 255, 255, 0.06);
         color: var(--text);
         padding: 4px 6px;
+        font-size: 0.8rem;
+      }
+      .settings .sound {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: rgba(255, 255, 255, 0.8);
         font-size: 0.8rem;
       }
       .settings .apply-btn {
@@ -149,6 +157,14 @@
         border-radius: 8px;
         cursor: pointer;
         font-weight: 600;
+      }
+      /* Flash animation when timer ends */
+      @keyframes flash {
+        0%, 100% { box-shadow: none; }
+        50% { box-shadow: 0 0 24px 12px var(--accent); }
+      }
+      .flash {
+        animation: flash 1s ease-in-out 2;
       }
     </style>
   </head>
@@ -177,6 +193,10 @@
           Break (min)
           <input type="number" id="breakInput" min="1" max="120" value="5" />
         </label>
+        <div class="sound">
+          <input type="checkbox" id="soundToggle" checked />
+          <span>Sound</span>
+        </div>
         <button class="apply-btn" id="applyBtn">Apply</button>
       </div>
     </div>
@@ -193,6 +213,7 @@
         workInput: document.getElementById('workInput'),
         breakInput: document.getElementById('breakInput'),
         applyBtn: document.getElementById('applyBtn'),
+        soundToggle: document.getElementById('soundToggle'),
       };
       function fmt(n) {
         return String(n).padStart(2, '0');
@@ -203,7 +224,42 @@
         left: 25 * 60,
         running: false,
         phase: 'work',
+        sound: true,
       };
+
+      // WebAudio context and chime function for end-of-session beep
+      let ctx = null;
+      function ensureAudio() {
+        if (ctx) return true;
+        try {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+      function chime() {
+        if (!timer.sound || !ctx) return;
+        const master = ctx.createGain();
+        master.connect(ctx.destination);
+        master.gain.value = 0.6;
+        const now = ctx.currentTime;
+        // play three ascending tones similar to original timer
+        [[880, 0.0, 0.18], [1175, 0.22, 0.22], [1568, 0.48, 0.24]].forEach(
+          ([freq, start, dur]) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + start);
+            gain.gain.setValueAtTime(0.001, now + start);
+            gain.gain.exponentialRampToValueAtTime(0.4, now + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+            osc.connect(gain).connect(master);
+            osc.start(now + start);
+            osc.stop(now + start + dur + 0.02);
+          }
+        );
+      }
       let iv = null;
       function paint() {
         const m = Math.floor(timer.left / 60);
@@ -241,6 +297,14 @@
         timer.left = timer.phase === 'work' ? timer.work : timer.break;
         ui.status.textContent = timer.phase === 'work' ? 'Work' : 'Break';
         paint();
+        // alert user with sound and visual flash
+        if (timer.sound) {
+          ensureAudio();
+          chime();
+        }
+        const card = document.querySelector('.card');
+        card.classList.add('flash');
+        setTimeout(() => card.classList.remove('flash'), 2000);
       }
       ui.start.addEventListener('click', () => {
         if (timer.running) {
@@ -271,6 +335,11 @@
         paint();
         ui.start.textContent = 'Start';
         ui.status.textContent = 'Updated';
+      });
+
+      // toggle sound on/off
+      ui.soundToggle.addEventListener('change', () => {
+        timer.sound = ui.soundToggle.checked;
       });
       // Parse URL parameters on load
       function fromURL() {
