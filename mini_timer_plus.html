@@ -131,14 +131,22 @@
         gap: 4px;
         color: rgba(255, 255, 255, 0.8);
       }
-      .settings input[type="number"] {
+      .settings input[type="number"],
+      .settings select {
         width: 100%;
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        background: rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.09);
         color: var(--text);
-        padding: 4px 6px;
-        font-size: 0.8rem;
+        padding: 6px 8px;
+        font-size: 0.85rem;
+        transition: box-shadow 0.2s ease, background 0.2s ease;
+      }
+      .settings input[type="number"]:focus,
+      .settings select:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--accent);
+        background: rgba(255, 255, 255, 0.12);
       }
       .settings .sound {
         display: flex;
@@ -182,9 +190,11 @@
         <button id="start" class="btn primary">Start</button>
         <button id="reset" class="btn">Reset</button>
         <button id="skip" class="btn">Skip</button>
+        <button id="snooze" class="btn">Snooze</button>
       </div>
       <div class="status" id="status">Stopped</div>
       <div class="settings" id="settings">
+        <!-- Row 1: work/break duration -->
         <label>
           Work (min)
           <input type="number" id="workInput" min="1" max="240" value="25" />
@@ -193,10 +203,31 @@
           Break (min)
           <input type="number" id="breakInput" min="1" max="120" value="5" />
         </label>
+        <!-- Row 2: snooze and sound length -->
+        <label>
+          Snooze (min)
+          <input type="number" id="snoozeInput" min="1" max="60" value="5" />
+        </label>
+        <label>
+          Sound length (s)
+          <input type="number" id="soundLen" min="1" max="10" value="3" />
+        </label>
+        <!-- Row 3: sound type and toggle -->
+        <label>
+          Sound type
+          <select id="soundType">
+            <option value="chime">Chime</option>
+            <option value="beep">Beep</option>
+            <option value="bell">Bell</option>
+            <!-- Added an "alarm" option for a multi‑pulse tone -->
+            <option value="alarm">Alarm</option>
+          </select>
+        </label>
         <div class="sound">
           <input type="checkbox" id="soundToggle" checked />
           <span>Sound</span>
         </div>
+        <!-- Row 4: apply button spans both columns -->
         <button class="apply-btn" id="applyBtn">Apply</button>
       </div>
     </div>
@@ -209,9 +240,13 @@
         start: document.getElementById('start'),
         reset: document.getElementById('reset'),
         skip: document.getElementById('skip'),
+        snooze: document.getElementById('snooze'),
         status: document.getElementById('status'),
         workInput: document.getElementById('workInput'),
         breakInput: document.getElementById('breakInput'),
+        snoozeInput: document.getElementById('snoozeInput'),
+        soundLen: document.getElementById('soundLen'),
+        soundType: document.getElementById('soundType'),
         applyBtn: document.getElementById('applyBtn'),
         soundToggle: document.getElementById('soundToggle'),
       };
@@ -225,6 +260,9 @@
         running: false,
         phase: 'work',
         sound: true,
+        snooze: 5 * 60,
+        soundLength: 3,
+        soundType: 'chime',
       };
 
       // WebAudio context and chime function for end-of-session beep
@@ -244,9 +282,14 @@
         master.connect(ctx.destination);
         master.gain.value = 0.6;
         const now = ctx.currentTime;
-        // play three ascending tones similar to original timer
-        [[880, 0.0, 0.18], [1175, 0.22, 0.22], [1568, 0.48, 0.24]].forEach(
-          ([freq, start, dur]) => {
+        // Use selected sound type and length
+        const len = Math.max(0.2, Math.min(10, timer.soundLength));
+        if (timer.soundType === 'chime') {
+          const baseDur = len / 3;
+          const tones = [880, 1175, 1568];
+          tones.forEach((freq, idx) => {
+            const start = idx * baseDur;
+            const dur = baseDur * 0.9;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sine';
@@ -257,8 +300,50 @@
             osc.connect(gain).connect(master);
             osc.start(now + start);
             osc.stop(now + start + dur + 0.02);
+          });
+        } else if (timer.soundType === 'beep') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(1000, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.5, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + len);
+          osc.connect(gain).connect(master);
+          osc.start(now);
+          osc.stop(now + len + 0.05);
+        } else if (timer.soundType === 'bell') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(660, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.6, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + len);
+          osc.connect(gain).connect(master);
+          osc.start(now);
+          osc.stop(now + len + 0.05);
+        } else if (timer.soundType === 'alarm') {
+          // Create a simple alarm consisting of a series of quick pulses
+          // Spread the pulses evenly across the requested sound length
+          const count = Math.max(1, Math.floor(len / 0.2));
+          const toneLen = len / count;
+          for (let i = 0; i < count; i++) {
+            const start = i * toneLen;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            // alternate between two frequencies for a more urgent feel
+            const freq = i % 2 === 0 ? 880 : 660;
+            osc.frequency.setValueAtTime(freq, now + start);
+            gain.gain.setValueAtTime(0.001, now + start);
+            gain.gain.exponentialRampToValueAtTime(0.5, now + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + start + toneLen);
+            osc.connect(gain).connect(master);
+            osc.start(now + start);
+            osc.stop(now + start + toneLen + 0.02);
           }
-        );
+        }
       }
       let iv = null;
       function paint() {
@@ -325,11 +410,29 @@
         timer.left = 0;
         done();
       });
+
+      // Start a snooze countdown when Snooze button is pressed
+      ui.snooze.addEventListener('click', () => {
+        // Pause any running timer and set the countdown to the snooze duration
+        pause();
+        timer.left = timer.snooze;
+        // Keep the current phase, but indicate snooze in the status
+        ui.status.textContent = 'Snoozing';
+        paint();
+        // Restart the countdown
+        start();
+      });
       ui.applyBtn.addEventListener('click', () => {
         const w = parseInt(ui.workInput.value, 10);
         const b = parseInt(ui.breakInput.value, 10);
+        const s = parseInt(ui.snoozeInput.value, 10);
+        const sl = parseInt(ui.soundLen.value, 10);
+        // update durations
         if (Number.isFinite(w) && w > 0) timer.work = Math.min(240, Math.max(1, w)) * 60;
         if (Number.isFinite(b) && b > 0) timer.break = Math.min(120, Math.max(1, b)) * 60;
+        if (Number.isFinite(s) && s > 0) timer.snooze = Math.min(60, Math.max(1, s)) * 60;
+        if (Number.isFinite(sl) && sl > 0) timer.soundLength = Math.min(10, Math.max(1, sl));
+        timer.soundType = ui.soundType.value;
         timer.left = timer.phase === 'work' ? timer.work : timer.break;
         pause();
         paint();
