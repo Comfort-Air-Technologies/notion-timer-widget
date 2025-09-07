@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comfort Air — Notion Timer Mini</title>
+    <style>
+      :root {
+        /* base colours matching the Comfort theme */
+        --bg: #0b1220;
+        --panel: #0f142b;
+        --text: #d9e2ef;
+        --accent: #1fb6ff;
+        --accent-2: #34d399;
+        --ringBase: rgba(255, 255, 255, 0.08);
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica,
+          Arial, Apple Color Emoji, Segoe UI Emoji;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      .card {
+        background: linear-gradient(
+          to bottom right,
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.03)
+        );
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        border-radius: 16px;
+        padding: 16px;
+        width: min(320px, 92vw);
+      }
+      .label {
+        font-weight: 700;
+        font-size: 1.25rem;
+        text-align: center;
+        margin-bottom: 8px;
+      }
+      .digits {
+        font-weight: 900;
+        font-size: 64px;
+        letter-spacing: 2px;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+      .controls {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+      }
+      .btn {
+        border-radius: 12px;
+        padding: 6px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #001019;
+        border-color: transparent;
+      }
+      .ring {
+        width: 140px;
+        height: 140px;
+        border-radius: 24px;
+        margin: 0 auto 12px;
+        position: relative;
+        padding: 6px;
+        background: radial-gradient(
+            110px 110px at 25% 25%,
+            var(--accent) 15%,
+            transparent
+          ),
+          radial-gradient(
+            110px 110px at 75% 75%,
+            var(--accent-2) 15%,
+            transparent
+          );
+      }
+      .ring .track {
+        position: absolute;
+        inset: 0;
+        border-radius: 24px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 8px 24px rgba(31, 182, 255, 0.22);
+      }
+      .ring .arc {
+        position: absolute;
+        inset: 6px;
+        border-radius: 18px;
+        background: conic-gradient(var(--accent) 0% 0%, var(--ringBase) 0%);
+      }
+      .ring .inner {
+        position: absolute;
+        inset: 16px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .small-text {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-align: center;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="label" id="lbl">Session</div>
+      <div class="ring">
+        <div class="track"></div>
+        <div class="arc" id="arc"></div>
+        <div class="inner">
+          <div class="digits" id="digits">25:00</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="start" class="btn primary">Start</button>
+        <button id="reset" class="btn">Reset</button>
+        <button id="skip" class="btn">Skip</button>
+      </div>
+      <div class="small-text" id="status">Stopped</div>
+    </div>
+    <script>
+      // Minimal timer logic derived from the original timer.html
+      const ui = {
+        lbl: document.getElementById('lbl'),
+        digits: document.getElementById('digits'),
+        arc: document.getElementById('arc'),
+        start: document.getElementById('start'),
+        reset: document.getElementById('reset'),
+        skip: document.getElementById('skip'),
+        status: document.getElementById('status'),
+      };
+      function fmt(n) {
+        return String(n).padStart(2, '0');
+      }
+      // default timer settings
+      const timer = {
+        work: 25 * 60,
+        break: 5 * 60,
+        left: 25 * 60,
+        running: false,
+        phase: 'work',
+      };
+      let iv = null;
+      function paint() {
+        const m = Math.floor(timer.left / 60);
+        const s = timer.left % 60;
+        ui.digits.textContent = `${fmt(m)}:${fmt(s)}`;
+        const total = timer.phase === 'work' ? timer.work : timer.break;
+        const pct = (1 - timer.left / Math.max(1, total)) * 100;
+        ui.arc.style.background = `conic-gradient(var(--accent) ${pct}%, var(--ringBase) ${pct}%)`;
+      }
+      function start() {
+        if (timer.running) return;
+        timer.running = true;
+        ui.status.textContent = 'Running';
+        iv = setInterval(() => {
+          if (timer.left <= 0) {
+            done();
+            return;
+          }
+          timer.left--;
+          paint();
+        }, 1000);
+      }
+      function pause() {
+        timer.running = false;
+        ui.status.textContent = 'Paused';
+        clearInterval(iv);
+      }
+      function reset() {
+        timer.left = timer.phase === 'work' ? timer.work : timer.break;
+        paint();
+      }
+      function done() {
+        pause();
+        // simple phase switching between work and break
+        timer.phase = timer.phase === 'work' ? 'break' : 'work';
+        timer.left = timer.phase === 'work' ? timer.work : timer.break;
+        ui.status.textContent = timer.phase === 'work' ? 'Work' : 'Break';
+        paint();
+      }
+      ui.start.addEventListener('click', () => {
+        if (timer.running) {
+          pause();
+          ui.start.textContent = 'Start';
+        } else {
+          start();
+          ui.start.textContent = 'Pause';
+        }
+      });
+      ui.reset.addEventListener('click', () => {
+        pause();
+        reset();
+        ui.start.textContent = 'Start';
+        ui.status.textContent = 'Stopped';
+      });
+      ui.skip.addEventListener('click', () => {
+        timer.left = 0;
+        done();
+      });
+      // Parse URL parameters
+      function fromURL() {
+        const p = new URLSearchParams(window.location.search);
+        const label = p.get('label');
+        const mins = Number(p.get('mins'));
+        const brk = Number(p.get('break'));
+        if (Number.isFinite(mins)) timer.work = Math.max(1, Math.min(240, mins)) * 60;
+        if (Number.isFinite(brk)) timer.break = Math.max(1, Math.min(120, brk)) * 60;
+        timer.left = timer.work;
+        if (label) ui.lbl.textContent = label;
+        paint();
+      }
+      fromURL();
+    </script>
+  </body>
+</html>
