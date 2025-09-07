@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comfort Air — Notion Timer Advanced</title>
+    <style>
+      :root {
+        /* base colours for the Comfort theme; these will be overridden per theme */
+        --bg: #0b1220;
+        --panel: #0f142b;
+        --text: #d9e2ef;
+        --accent: #1fb6ff;
+        --accent-2: #34d399;
+        --danger: #ef4444;
+        --ringBase: rgba(255, 255, 255, 0.08);
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica,
+          Arial, Apple Color Emoji, Segoe UI Emoji;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      .card {
+        background: linear-gradient(
+          to bottom right,
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.03)
+        );
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        border-radius: 18px;
+        padding: 16px;
+        width: min(360px, 94vw);
+      }
+      .label {
+        font-weight: 700;
+        font-size: 1.3rem;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      .ring {
+        width: 160px;
+        height: 160px;
+        border-radius: 28px;
+        margin: 0 auto 12px;
+        position: relative;
+        padding: 8px;
+        background: radial-gradient(
+            120px 120px at 25% 25%,
+            var(--accent) 15%,
+            transparent
+          ),
+          radial-gradient(
+            120px 120px at 75% 75%,
+            var(--accent-2) 15%,
+            transparent
+          );
+      }
+      .ring .track {
+        position: absolute;
+        inset: 0;
+        border-radius: 28px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 10px 30px rgba(31, 182, 255, 0.25);
+      }
+      .ring .arc {
+        position: absolute;
+        inset: 8px;
+        border-radius: 20px;
+        background: conic-gradient(var(--accent) 0%, var(--ringBase) 0%);
+      }
+      .ring .inner {
+        position: absolute;
+        inset: 20px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .digits {
+        font-weight: 900;
+        font-size: 64px;
+        letter-spacing: 2px;
+        color: #ffffff;
+      }
+      .controls {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .btn {
+        border-radius: 12px;
+        padding: 6px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #001019;
+        border-color: transparent;
+      }
+      .status {
+        font-size: 0.8rem;
+        text-align: center;
+        margin-top: 8px;
+        color: rgba(255, 255, 255, 0.6);
+      }
+      /* settings panel */
+      .settings {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 0.8rem;
+        align-items: end;
+      }
+      .settings label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .settings input[type="number"],
+      .settings input[type="text"],
+      .settings select {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.09);
+        color: var(--text);
+        padding: 6px 8px;
+        font-size: 0.85rem;
+        transition: box-shadow 0.2s ease, background 0.2s ease;
+      }
+      .settings input[type="number"]:focus,
+      .settings input[type="text"]:focus,
+      .settings select:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--accent);
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .settings .sound,
+      .settings .vibrate {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.8rem;
+      }
+      .settings .apply-btn,
+      .settings .export-btn {
+        grid-column: span 2;
+        margin-top: 4px;
+        padding: 6px;
+        background: var(--accent-2);
+        color: #001019;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .settings .export-btn {
+        background: var(--accent);
+      }
+      /* Flash animation when timer ends */
+      @keyframes flash {
+        0%, 100% { box-shadow: none; }
+        50% { box-shadow: 0 0 24px 12px var(--accent); }
+      }
+      .flash {
+        animation: flash 1s ease-in-out 2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="label" id="lbl">Session</div>
+      <div class="ring">
+        <div class="track"></div>
+        <div class="arc" id="arc"></div>
+        <div class="inner">
+          <div class="digits" id="digits">00:00</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="start" class="btn primary">Start</button>
+        <button id="reset" class="btn">Reset</button>
+        <button id="skip" class="btn">Skip</button>
+        <button id="snooze" class="btn">Snooze</button>
+      </div>
+      <div class="status" id="status">Stopped</div>
+      <div class="settings" id="settings">
+        <label>
+          Work (min)
+          <input type="number" id="workInput" min="1" max="240" value="25" />
+        </label>
+        <label>
+          Break (min)
+          <input type="number" id="breakInput" min="1" max="120" value="5" />
+        </label>
+        <label>
+          Snooze (min)
+          <input type="number" id="snoozeInput" min="1" max="60" value="5" />
+        </label>
+        <label>
+          Sound length (s)
+          <input type="number" id="soundLen" min="1" max="10" value="3" />
+        </label>
+        <label>
+          Sound type
+          <select id="soundType">
+            <option value="chime">Chime</option>
+            <option value="beep">Beep</option>
+            <option value="bell">Bell</option>
+            <option value="alarm">Alarm</option>
+          </select>
+        </label>
+        <div class="sound">
+          <input type="checkbox" id="soundToggle" checked />
+          <span>Sound</span>
+        </div>
+        <label>
+          Theme
+          <select id="themeSelect">
+            <option value="comfort">Comfort</option>
+            <option value="neon">Neon</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </label>
+        <div class="vibrate">
+          <input type="checkbox" id="vibrateToggle" />
+          <span>Vibrate</span>
+        </div>
+        <label>
+          Mode
+          <select id="modeSelect">
+            <option value="timer">Timer</option>
+            <option value="stopwatch">Stopwatch</option>
+          </select>
+        </label>
+        <label>
+          Job
+          <input type="text" id="jobInput" placeholder="Job name" />
+        </label>
+        <button class="apply-btn" id="applyBtn">Apply</button>
+        <button class="export-btn" id="exportBtn">Export Logs</button>
+      </div>
+    </div>
+    <script>
+      // Advanced timer/stopwatch logic
+      const ui = {
+        lbl: document.getElementById('lbl'),
+        digits: document.getElementById('digits'),
+        arc: document.getElementById('arc'),
+        start: document.getElementById('start'),
+        reset: document.getElementById('reset'),
+        skip: document.getElementById('skip'),
+        snooze: document.getElementById('snooze'),
+        status: document.getElementById('status'),
+        workInput: document.getElementById('workInput'),
+        breakInput: document.getElementById('breakInput'),
+        snoozeInput: document.getElementById('snoozeInput'),
+        soundLen: document.getElementById('soundLen'),
+        soundType: document.getElementById('soundType'),
+        soundToggle: document.getElementById('soundToggle'),
+        themeSelect: document.getElementById('themeSelect'),
+        vibrateToggle: document.getElementById('vibrateToggle'),
+        modeSelect: document.getElementById('modeSelect'),
+        jobInput: document.getElementById('jobInput'),
+        applyBtn: document.getElementById('applyBtn'),
+        exportBtn: document.getElementById('exportBtn'),
+      };
+      function fmt(n) {
+        return String(n).padStart(2, '0');
+      }
+      const themes = {
+        comfort: { accent: '#1fb6ff', accent2: '#34d399' },
+        neon: { accent: '#9333ea', accent2: '#fcd34d' },
+        minimal: { accent: '#6b7280', accent2: '#93c5fd' },
+      };
+      function applyTheme(name) {
+        const t = themes[name] || themes.comfort;
+        document.documentElement.style.setProperty('--accent', t.accent);
+        document.documentElement.style.setProperty('--accent-2', t.accent2);
+      }
+      const timer = {
+        work: 25 * 60,
+        break: 5 * 60,
+        left: 0,
+        running: false,
+        phase: 'work',
+        sound: true,
+        snooze: 5 * 60,
+        soundLength: 3,
+        soundType: 'chime',
+        vibrate: false,
+        theme: 'comfort',
+        mode: 'timer',
+        jobLogs: [],
+        currentLog: null,
+      };
+      // WebAudio context and chime functions
+      let ctx = null;
+      function ensureAudio() {
+        if (ctx) return true;
+        try {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+      function playTone() {
+        if (!timer.sound || !ctx) return;
+        const master = ctx.createGain();
+        master.connect(ctx.destination);
+        master.gain.value = 0.6;
+        const now = ctx.currentTime;
+        const len = Math.max(0.2, Math.min(10, timer.soundLength));
+        if (timer.soundType === 'chime') {
+          const baseDur = len / 3;
+          const tones = [880, 1175, 1568];
+          tones.forEach((freq, idx) => {
+            const start = idx * baseDur;
+            const dur = baseDur * 0.9;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + start);
+            gain.gain.setValueAtTime(0.001, now + start);
+            gain.gain.exponentialRampToValueAtTime(0.4, now + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+            osc.connect(gain).connect(master);
+            osc.start(now + start);
+            osc.stop(now + start + dur + 0.02);
+          });
+        } else if (timer.soundType === 'beep') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(1000, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.5, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + len);
+          osc.connect(gain).connect(master);
+          osc.start(now);
+          osc.stop(now + len + 0.05);
+        } else if (timer.soundType === 'bell') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(660, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.6, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + len);
+          osc.connect(gain).connect(master);
+          osc.start(now);
+          osc.stop(now + len + 0.05);
+        } else if (timer.soundType === 'alarm') {
+          const count = Math.max(1, Math.floor(len / 0.2));
+          const toneLen = len / count;
+          for (let i = 0; i < count; i++) {
+            const start = i * toneLen;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            const freq = i % 2 === 0 ? 880 : 660;
+            osc.frequency.setValueAtTime(freq, now + start);
+            gain.gain.setValueAtTime(0.001, now + start);
+            gain.gain.exponentialRampToValueAtTime(0.5, now + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + start + toneLen);
+            osc.connect(gain).connect(master);
+            osc.start(now + start);
+            osc.stop(now + start + toneLen + 0.02);
+          }
+        }
+      }
+      let iv = null;
+      function paint() {
+        const m = Math.floor(timer.left / 60);
+        const s = timer.left % 60;
+        ui.digits.textContent = `${fmt(m)}:${fmt(s)}`;
+        const total = timer.phase === 'work' ? timer.work : timer.break;
+        const pct = timer.mode === 'timer' ? (1 - timer.left / Math.max(1, total)) * 100 : (timer.left % total) / total * 100;
+        ui.arc.style.background = `conic-gradient(var(--accent) ${pct}%, var(--ringBase) ${pct}%)`;
+      }
+      function start() {
+        if (timer.running) return;
+        timer.running = true;
+        ui.status.textContent = timer.mode === 'stopwatch' ? 'Running (stopwatch)' : 'Running';
+        // For stopwatch mode, start at zero if first start
+        if (timer.mode === 'stopwatch' && timer.left === 0) {
+          timer.left = 0;
+        }
+        if (timer.mode === 'stopwatch' && !timer.currentLog) {
+          timer.currentLog = {
+            job: ui.jobInput.value || ui.lbl.textContent,
+            start: new Date().toISOString(),
+            end: null,
+            duration: 0,
+          };
+        }
+        iv = setInterval(() => {
+          if (timer.mode === 'timer') {
+            if (timer.left <= 0) {
+              done();
+              return;
+            }
+            timer.left--;
+            paint();
+          } else {
+            // stopwatch counts up
+            timer.left++;
+            paint();
+          }
+        }, 1000);
+      }
+      function pause() {
+        if (!timer.running) return;
+        timer.running = false;
+        clearInterval(iv);
+        ui.status.textContent = 'Paused';
+        // If stopwatch and currently logging, finalize the log
+        if (timer.mode === 'stopwatch' && timer.currentLog) {
+          timer.currentLog.end = new Date().toISOString();
+          timer.currentLog.duration = timer.left;
+          timer.jobLogs.push(timer.currentLog);
+          timer.currentLog = null;
+        }
+      }
+      function reset() {
+        pause();
+        timer.left = timer.mode === 'timer' ? (timer.phase === 'work' ? timer.work : timer.break) : 0;
+        paint();
+      }
+      function done() {
+        pause();
+        // Timer completion toggles phase
+        if (timer.mode === 'timer') {
+          timer.phase = timer.phase === 'work' ? 'break' : 'work';
+          timer.left = timer.phase === 'work' ? timer.work : timer.break;
+          ui.status.textContent = timer.phase === 'work' ? 'Work' : 'Break';
+          paint();
+          if (timer.sound) {
+            ensureAudio();
+            playTone();
+          }
+          if (timer.vibrate && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          const card = document.querySelector('.card');
+          card.classList.add('flash');
+          setTimeout(() => card.classList.remove('flash'), 2000);
+        }
+      }
+      // Event listeners
+      ui.start.addEventListener('click', () => {
+        if (timer.running) {
+          pause();
+          ui.start.textContent = 'Start';
+        } else {
+          start();
+          ui.start.textContent = 'Pause';
+        }
+      });
+      ui.reset.addEventListener('click', () => {
+        reset();
+        ui.start.textContent = 'Start';
+        ui.status.textContent = 'Stopped';
+      });
+      ui.skip.addEventListener('click', () => {
+        if (timer.mode === 'timer') {
+          timer.left = 0;
+          done();
+        } else {
+          // skip in stopwatch just ends current log and resets
+          pause();
+          timer.left = 0;
+          paint();
+        }
+      });
+      ui.snooze.addEventListener('click', () => {
+        if (timer.mode === 'timer') {
+          pause();
+          timer.left = timer.snooze;
+          ui.status.textContent = 'Snoozing';
+          paint();
+          start();
+        }
+      });
+      ui.applyBtn.addEventListener('click', () => {
+        // durations
+        const w = parseInt(ui.workInput.value, 10);
+        const b = parseInt(ui.breakInput.value, 10);
+        const s = parseInt(ui.snoozeInput.value, 10);
+        const sl = parseInt(ui.soundLen.value, 10);
+        if (Number.isFinite(w) && w > 0) timer.work = Math.min(240, Math.max(1, w)) * 60;
+        if (Number.isFinite(b) && b > 0) timer.break = Math.min(120, Math.max(1, b)) * 60;
+        if (Number.isFinite(s) && s > 0) timer.snooze = Math.min(60, Math.max(1, s)) * 60;
+        if (Number.isFinite(sl) && sl > 0) timer.soundLength = Math.min(10, Math.max(1, sl));
+        timer.soundType = ui.soundType.value;
+        timer.sound = ui.soundToggle.checked;
+        timer.theme = ui.themeSelect.value;
+        timer.vibrate = ui.vibrateToggle.checked;
+        timer.mode = ui.modeSelect.value;
+        applyTheme(timer.theme);
+        reset();
+        ui.status.textContent = 'Updated';
+      });
+      ui.exportBtn.addEventListener('click', () => {
+        if (timer.jobLogs.length === 0) {
+          alert('No logs to export');
+          return;
+        }
+        const dataStr = JSON.stringify(timer.jobLogs, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(dataStr).then(() => {
+            alert('Logs copied to clipboard!');
+          }, () => {
+            alert(dataStr);
+          });
+        } else {
+          alert(dataStr);
+        }
+      });
+      // toggle sound on/off
+      ui.soundToggle.addEventListener('change', () => {
+        timer.sound = ui.soundToggle.checked;
+      });
+      // Initialize theme and default values on load
+      applyTheme(timer.theme);
+      timer.left = timer.work;
+      paint();
+      ui.lbl.textContent = 'Session';
+    </script>
+  </body>
+</html>
